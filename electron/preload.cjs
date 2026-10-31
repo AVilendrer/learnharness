@@ -33,6 +33,12 @@ const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 let openSettingsListener = null;
 let pendingOpenSettings = null;
+let sessionTimerFlush = null;
+ipcRenderer.on("lh:session-timer:flush", async (_event, id) => {
+	try { await sessionTimerFlush?.(); }
+	catch { /* The renderer surfaces storage errors; closing remains bounded. */ }
+	finally { ipcRenderer.send("lh:session-timer:flushed", id); }
+});
 ipcRenderer.on("lh:open-settings", (_event, section) => {
 	if (openSettingsListener) openSettingsListener(section);
 	else pendingOpenSettings = section;
@@ -40,6 +46,10 @@ ipcRenderer.on("lh:open-settings", (_event, section) => {
 
 contextBridge.exposeInMainWorld("lh", {
 	platform: process.platform,
+	onSessionTimerFlush: (cb) => {
+		sessionTimerFlush = cb;
+		return () => { if (sessionTimerFlush === cb) sessionTimerFlush = null; };
+	},
 	// Resolve only a renderer-supplied, OS-backed File. No filesystem API,
 	// uploads, copies, or DOM File IPC to main; sandbox/isolation stay on.
 	getPathForFile: (file) => webUtils.getPathForFile(file),

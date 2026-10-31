@@ -218,12 +218,15 @@ export interface SessionModelOptions extends SessionModelDeps {
 	initialError?: string;
 	/** Fires on every state change (the hook re-renders). */
 	onChange?: () => void;
+	/** Explicit learner activity, used to resume the session stopwatch. */
+	onLearnerInput?: () => void;
 	/** The reattach settled terminal (turn-settled): no turn running, the
 	 *  record is current — the caller refetches it. */
 	onReattachSettled?: () => void;
 }
 
 export class SessionModel {
+	onLearnerInput?: () => void;
 	readonly chatId: string;
 	/** Injectable fetch (tests); defaults to the global. */
 	fetch: typeof globalThis.fetch;
@@ -278,6 +281,7 @@ export class SessionModel {
 		this.pollMs = opts.pollMs ?? TURN_POLL_MS;
 		this.waitMaxMs = opts.waitMaxMs ?? TURN_WAIT_MAX_MS;
 		this.onChange = opts.onChange;
+		this.onLearnerInput = opts.onLearnerInput;
 		this.onReattachSettled = opts.onReattachSettled;
 	}
 
@@ -653,6 +657,7 @@ export class SessionModel {
 		if (input.type === "answer" && questionKey !== undefined &&
 			(subject?.key !== questionKey || subject.toolCallId !== input.toolCallId)) return false;
 		const expectedKey = questionKey ?? (input.type === "answer" && subject?.toolCallId === input.toolCallId ? subject.key : undefined);
+		if (input.type === "text" || input.type === "answer" || input.type === "thinking" || input.type === "next") this.onLearnerInput?.();
 		this.consumeAbort?.abort();
 		const controller = new AbortController();
 		this.consumeAbort = controller;
@@ -806,6 +811,7 @@ export class SessionModel {
 	async steer(text: string): Promise<void> {
 		const t = text.trim();
 		if (!t) return;
+		this.onLearnerInput?.();
 		const id = `steer_${localId()}`;
 		this.steerQueueValue = [...this.steerQueueValue, { id, text: t }];
 		this.onChange?.();

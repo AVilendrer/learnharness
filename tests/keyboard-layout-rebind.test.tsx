@@ -56,6 +56,16 @@ afterEach(async () => {
 });
 
 describe("keyboard rebind shares layout normalization with dispatch", () => {
+	it("rebinds the session stopwatch immediately and resets to P", async () => {
+		const host = await mount();
+		assert.equal(actionForBinding("p"), "toggle-session-timer");
+		await click(host, "kbd-rebind-toggle-session-timer");
+		await press({ key: "y", code: "KeyY", ctrlKey: true, shiftKey: true });
+		assert.equal(actionForBinding("mod+shift+y"), "toggle-session-timer");
+		assert.equal(actionForBinding("p"), undefined);
+		await click(host, "kbd-reset-toggle-session-timer");
+		assert.equal(actionForBinding("p"), "toggle-session-timer");
+	});
 	it("captures a Russian modified key as an ordinary binding and resets it normally", async () => {
 		const host = await mount();
 		await click(host, "kbd-rebind-find");

@@ -80,6 +80,7 @@ declare global {
 			checkForUpdates?: () => Promise<void>;
 			installUpdate?: () => void;
 			onOpenSettings?: (cb: (section: string) => void) => () => void;
+			onSessionTimerFlush?: (cb: () => Promise<void>) => () => void;
 		};
 	}
 }

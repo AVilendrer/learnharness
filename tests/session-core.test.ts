@@ -30,6 +30,49 @@ import { dismissedAnswer } from "../src/core/question-core.ts";
 import { buildAnswer, type QuestionData } from "../src/core/question-core.ts";
 
 const realFetch = globalThis.fetch;
+
+describe("stopwatch learner activity", () => {
+	for (const input of [
+		{ type: "text", text: "hello" },
+		{ type: "answer", toolCallId: "call-1", answer: { correct: true } },
+		{ type: "thinking", problemCallId: "problem-1", text: "my reasoning" },
+		{ type: "next" },
+	] as ChatInput[]) {
+		it(`signals ${input.type} immediately, before the network response`, async () => {
+			let signals = 0;
+			let finish!: (response: Response) => void;
+			const model = new SessionModel({ chatId: "chat_x", initialMessages: [],
+				onLearnerInput: () => { signals++; },
+				fetch: (() => new Promise<Response>((resolve) => { finish = resolve; })) as typeof fetch });
+			const pending = model.send(input);
+			assert.equal(signals, 1);
+			finish(new Response("fixture refusal", { status: 400 }));
+			await pending;
+		});
+	}
+	it("does not resume on automatic continuation or locally rejected input", async () => {
+		let signals = 0;
+		const model = new SessionModel({ chatId: "chat_x", initialMessages: [],
+			onLearnerInput: () => { signals++; },
+			fetch: (async () => new Response("fixture refusal", { status: 400 })) as typeof fetch });
+		await model.send({ type: "continue" });
+		assert.equal(signals, 0);
+		const busy = new SessionModel({ chatId: "chat_x", initialMessages: [], onLearnerInput: () => { signals++; } });
+		busy.readyRef = false;
+		await busy.send({ type: "text", text: "busy" });
+		assert.equal(signals, 0);
+	});
+	it("signals a nonempty steer, but ignores empty steering", async () => {
+		let signals = 0;
+		const model = new SessionModel({ chatId: "chat_x", initialMessages: [],
+			onLearnerInput: () => { signals++; },
+			fetch: (async () => Response.json({ ok: true })) as typeof fetch });
+		await model.steer("  ");
+		assert.equal(signals, 0);
+		await model.steer("another thought");
+		assert.equal(signals, 1);
+	});
+});
 afterEach(() => {
 	globalThis.fetch = realFetch;
 });

@@ -107,6 +107,7 @@ export function KeyboardShortcuts() {
 			// ── Registry dispatch.
 			const action = actionForBinding(eventBinding(e));
 			if (!action) return;
+			if (action === "toggle-session-timer" && e.repeat) return;
 
 			// The input guard: inside a typing surface only mod/alt combos
 			// fire (they never type a character). Bare keys — "?" included —

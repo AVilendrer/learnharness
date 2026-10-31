@@ -26,9 +26,10 @@ export interface UseChatSessionOptions {
 	initialError?: string;
 	/** Reattach on mount: a turn is running server-side with no live view. */
 	initiallyInFlight?: boolean;
+	onLearnerInput?: () => void;
 }
 
-export function useChatSession({ chatId, initialMessages, initialError, initiallyInFlight }: UseChatSessionOptions) {
+export function useChatSession({ chatId, initialMessages, initialError, initiallyInFlight, onLearnerInput }: UseChatSessionOptions) {
 	// The model is per-mount (chatId-keyed component); onChange forces the
 	// re-render. The ref pattern keeps it stable across renders.
 	const modelRef = useRef<SessionModel | null>(null);
@@ -36,6 +37,7 @@ export function useChatSession({ chatId, initialMessages, initialError, initiall
 		modelRef.current = new SessionModel({ chatId, initialMessages, initialError });
 	}
 	const model = modelRef.current;
+	model.onLearnerInput = onLearnerInput;
 	// The render VERSION — bumped by every model change, so the state memo
 	// below recomputes exactly when the model actually changed. (Using the
 	// reducer's dispatch as the memo dep was a freeze bug: dispatch is

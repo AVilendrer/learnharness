@@ -18,6 +18,7 @@ Press **?** outside a text field for the in-app cheat sheet.
 | New session | Mod+N |
 | Rename current session | F2 |
 | Toggle all your thinking in the session | Mod+T |
+| Start / pause session stopwatch | P |
 | Find in session / search graph or chains view | Mod+F |
 | Shortcut cheat sheet | ? |
 
@@ -29,6 +30,18 @@ Reset, and Reset all controls. Overrides are stored on this device in
 localStorage (`lh:keymap`), not in the learning-data settings file. Contextual
 question keys are shown as **Fixed — part of this screen**, not rebindable.
 Tab and Esc also have dedicated handling outside ordinary registry dispatch.
+
+The session header stopwatch can also be clicked. **P** starts or pauses it
+outside typing fields; change its binding under **Settings → Keyboard → Chat**.
+Submitting a message, question answer or practice response, sending a steer,
+or requesting the next practice problem starts/resumes it immediately.
+Automatic agent continuations do not resume a paused stopwatch. Leaving the
+session or closing the app pauses it; returning restores the saved total paused.
+Time in another application still counts while the session is running.
+Totals are stored separately under `data/session-timers/`; existing sessions
+begin at zero without changing their conversation or graph records. Totals
+are checkpointed every five seconds and on pause/departure; a force-quit or
+power loss can lose time since the last successful checkpoint.
 
 ## Keyboard layouts
 

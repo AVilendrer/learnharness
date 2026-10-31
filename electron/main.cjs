@@ -25,6 +25,8 @@
  */
 
 const { app, BrowserWindow, Menu, ipcMain, session, shell } = require("electron");
+const { installSessionTimerShutdown } = require("./session-timer-shutdown.cjs");
+let timerShutdown = null;
 const { createChatGPT, fileStore } = require("./chatgpt.cjs");
 const { attachChatGPTChild, trustedSender, chatGPTControl } = require("./chatgpt-ipc.cjs");
 const { createSubscriptions, loadSubscriptionSDK } = require("./subscriptions.cjs");
@@ -339,6 +341,7 @@ function createWindow(url) {
 	});
 
 	trustedAppWindows.add(win);
+	timerShutdown?.protectWindow(win);
 	win.once("closed", () => trustedAppWindows.delete(win));
 	const allowedOrigin = () => new URL(url).origin;
 	// Deny-by-default; the ONLY grants are media (mic/STT groundwork) and
@@ -494,6 +497,10 @@ function checkForUpdates({ manual = false } = {}) {
 }
 
 function installUpdateNow() {
+	if (timerShutdown) {
+		void timerShutdown.flushAll().finally(() => { killServer(); autoUpdater?.quitAndInstall(); });
+		return;
+	}
 	// Kill the server BEFORE the quit-and-install (see block comment).
 	try {
 		killServer();
@@ -640,7 +647,7 @@ async function main() {
 	});
 
 	// The child must not outlive us — cover every quit path.
-	app.on("before-quit", killServer);
+	timerShutdown = installSessionTimerShutdown({ app, ipcMain, windows: () => trustedAppWindows, stopServer: killServer });
 	process.on("exit", killServer);
 	process.on("SIGHUP", killServer);
 
