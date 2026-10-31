@@ -5,6 +5,29 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { it } from "node:test";
 import { copyShikiRuntime } from "../scripts/copy-shiki-runtime.mjs";
+import { createRequire } from "node:module";
+
+it("materializes a traced directory link without copying into the installed source package", async (t) => {
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lh-shiki-link-"));
+	try {
+		const root = path.resolve(import.meta.dirname, "..");
+		const code = path.join(root, "node_modules", "@streamdown", "code", "package.json");
+		const sourceFile = createRequire(code).resolve.paths("shiki")!.map((lookup) => path.join(lookup, "shiki", "package.json")).find((p) => fs.existsSync(p))!;
+		const source = path.dirname(sourceFile);
+		const originalNames = fs.readdirSync(source);
+		const alias = path.join(dir, ".next", "node_modules", "shiki-link");
+		fs.mkdirSync(path.dirname(alias), { recursive: true });
+		try { fs.symlinkSync(source, alias, process.platform === "win32" ? "junction" : "dir"); }
+		catch (error) {
+			if ((error as NodeJS.ErrnoException).code === "EPERM") { t.skip("Directory links are denied in this execution environment"); return; }
+			throw error;
+		}
+		copyShikiRuntime(root, dir);
+		assert.equal(fs.lstatSync(alias).isSymbolicLink(), false);
+		assert.ok(fs.existsSync(path.join(alias, "node_modules", "@shikijs", "core", "package.json")));
+		assert.deepEqual(fs.readdirSync(source), originalNames);
+	} finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
 
 it("the isolated Turbopack Shiki alias can import and highlight after payload curation", async () => {
 	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lh-shiki-payload-"));

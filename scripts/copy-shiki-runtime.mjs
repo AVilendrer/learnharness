@@ -27,6 +27,10 @@ export function copyShikiRuntime(root, standalone) {
 		const target = path.join(modules, name);
 		const record = JSON.parse(fs.readFileSync(path.join(target, "package.json"), "utf8"));
 		if (record.name !== "shiki" || record.version !== version) throw new Error("Shiki alias version differs from locked source");
+		// The fresh Windows trace is a junction; archives materialize it as
+		// a directory. Detach only the link so copying cannot write through
+		// into the source dependency or fail Node's directory/link guard.
+		if (fs.lstatSync(target).isSymbolicLink()) fs.unlinkSync(target);
 		const seen = new Map();
 		const dependencyRoot = path.join(target, "node_modules");
 		function copy(file, destination) {
