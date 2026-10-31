@@ -12,6 +12,7 @@
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { copyShikiRuntime } from "./copy-shiki-runtime.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const STANDALONE = path.join(ROOT, ".next", "standalone");
@@ -89,4 +90,5 @@ for (const asset of [
 	}
 }
 
+copyShikiRuntime(ROOT, STANDALONE);
 console.log("[build-server] server payload ready:", STANDALONE);

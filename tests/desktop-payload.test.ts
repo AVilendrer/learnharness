@@ -23,6 +23,7 @@ function withPayload(test: (fixture: {
 	};
 	try {
 		write(path.join("scripts", "build-server.mjs"), source);
+		write(path.join("scripts", "copy-shiki-runtime.mjs"), fs.readFileSync(new URL("../scripts/copy-shiki-runtime.mjs", import.meta.url), "utf8"));
 		write(path.join(STANDALONE, "server.js"));
 		write(path.join(".next", "static", "runtime.js"));
 		write(path.join("public", "asset.txt"));

@@ -44,7 +44,7 @@ const RUNTIME = ELECTRON_MODE ? createRequire(import.meta.url)("electron") : pro
 const POLL_MS = 500;
 const BOOT_TIMEOUT_MS = 30_000;
 /** GET-only probes — the routes that exercised today's failure class. */
-const PROBES = ["/api/graph", "/api/models", "/api/settings"];
+const PROBES = ["/api/graph", "/api/models", "/api/settings", "/chat/chat_payload_smoke", "/api/chats/chat_payload_smoke/timer"];
 
 if (!fs.existsSync(SERVER)) {
 	console.error("[smoke-server] .next/standalone/server.js missing — run next build first.");
@@ -92,6 +92,11 @@ async function main() {
 	const dataDir = path.join(home, "data");
 	const authFile = path.join(home, "auth.json");
 	fs.writeFileSync(authFile, "{}\n", "utf-8");
+	fs.mkdirSync(path.join(dataDir, "chats"), { recursive: true });
+	fs.writeFileSync(path.join(dataDir, "chats", "chat_payload_smoke.json"), JSON.stringify({
+		id: "chat_payload_smoke", title: "Payload smoke test", version: 1,
+		createdAt: "2026-10-31T00:00:00.000Z", updatedAt: "2026-10-31T00:00:00.000Z", messages: [],
+	}));
 
 	const tail = []; // rolling log tail for failure diagnosis
 	let tailBytes = 0;
