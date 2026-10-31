@@ -174,6 +174,16 @@ async function main() {
 			if (status !== 200) throw new Error(`GET ${route} → ${status} (expected 200)`);
 			console.log(`[smoke-server] GET ${route} → 200`);
 		}
+		// Only the disposable seeded session is changed by these probes.
+		const timerUrl = url + "/api/chats/chat_payload_smoke/timer";
+		const mutate = (method, body) => fetch(timerUrl, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+		if ((await mutate("POST", { elapsedMs: 12000, generation: 0 })).status !== 200) throw new Error("timer checkpoint failed");
+		const reset = await mutate("DELETE", { generation: 0 });
+		const state = await reset.json();
+		if (reset.status !== 200 || state.elapsedMs !== 0 || state.generation !== 1) throw new Error("timer reset failed");
+		if ((await mutate("POST", { elapsedMs: 13000, generation: 0 })).status !== 409) throw new Error("stale checkpoint was accepted after reset");
+		if ((await mutate("POST", { elapsedMs: 1500, generation: 1 })).status !== 200) throw new Error("new checkpoint failed after reset");
+		console.log("[smoke-server] timer reset and stale-save protection passed");
 	} catch (err) {
 		failed = err;
 	} finally {

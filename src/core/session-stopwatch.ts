@@ -8,6 +8,7 @@ export class SessionStopwatch {
 		return Math.floor(this.savedTotal + this.accrued + (this.startedAt === null ? 0 : Math.max(0, this.now() - this.startedAt)));
 	}
 	start(): void { if (this.startedAt === null) this.startedAt = this.now(); }
+	reset(): void { this.savedTotal = 0; this.accrued = 0; this.startedAt = null; }
 	pause(): void {
 		if (this.startedAt === null) return;
 		this.accrued += Math.max(0, this.now() - this.startedAt);
@@ -15,6 +16,17 @@ export class SessionStopwatch {
 	}
 	/** Merge the initial read without losing activity during its request. */
 	restore(elapsedMs: number): void { this.savedTotal = Math.max(this.savedTotal, elapsedMs); }
+}
+
+export interface SessionTimerState { elapsedMs: number; generation: number; }
+export function validSessionTime(value: unknown): value is number {
+	return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+export function parseSessionTimerState(value: unknown): SessionTimerState {
+	const record = value as Partial<SessionTimerState> | null;
+	const generation = record?.generation === undefined ? 0 : record.generation;
+	if (!validSessionTime(record?.elapsedMs) || !validSessionTime(generation)) throw new Error("Invalid session time");
+	return { elapsedMs: record.elapsedMs, generation };
 }
 
 export function formatSessionTime(elapsedMs: number): string {

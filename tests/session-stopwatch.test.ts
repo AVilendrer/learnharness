@@ -3,6 +3,16 @@ import { describe, it } from "node:test";
 import { SessionStopwatch, formatSessionTime } from "../src/core/session-stopwatch.ts";
 
 describe("session stopwatch", () => {
+	it("resets all accumulated time and stops the clock", () => {
+		let now = 0;
+		const timer = new SessionStopwatch(65000, () => now);
+		timer.start(); now = 2000;
+		timer.reset(); now = 9000;
+		assert.equal(timer.elapsedMs, 0);
+		assert.equal(timer.running, false);
+		timer.start(); now = 10500;
+		assert.equal(timer.elapsedMs, 1500);
+	});
 	it("counts running intervals once, excluding pauses and time before reopening", () => {
 		let now = 0;
 		const timer = new SessionStopwatch(0, () => now);

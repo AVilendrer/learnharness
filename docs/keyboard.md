@@ -38,6 +38,9 @@ or requesting the next practice problem starts/resumes it immediately.
 Automatic agent continuations do not resume a paused stopwatch. Leaving the
 session or closing the app pauses it; returning restores the saved total paused.
 Time in another application still counts while the session is running.
+The reset icon beside the stopwatch asks for confirmation, then clears only
+that session's elapsed time and leaves it paused. Cancel keeps the current
+time and running state. Messages and learning records are unchanged.
 Totals are stored separately under `data/session-timers/`; existing sessions
 begin at zero without changing their conversation or graph records. Totals
 are checkpointed every five seconds and on pause/departure; a force-quit or

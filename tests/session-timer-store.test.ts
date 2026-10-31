@@ -6,7 +6,7 @@ import { after, describe, it } from "node:test";
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "lh-timer-"));
 process.env.LH_DATA_DIR = root;
-const { readSessionTimer, writeSessionTimer } = await import("../src/store/session-timers.ts");
+const { readSessionTimer, readSessionTimerState, writeSessionTimer, resetSessionTimer } = await import("../src/store/session-timers.ts");
 after(() => fs.rmSync(root, { recursive: true, force: true }));
 
 describe("separate session timer storage", () => {
@@ -42,5 +42,22 @@ describe("separate session timer storage", () => {
 			assert.throws(() => writeSessionTimer("chat_future", 200));
 			assert.equal(fs.readFileSync(file, "utf8"), raw);
 		}
+	});
+	it("resets only the timer and rejects checkpoints from before the reset", () => {
+		fs.mkdirSync(path.join(root, "chats"), { recursive: true });
+		fs.mkdirSync(path.join(root, "graph"), { recursive: true });
+		fs.writeFileSync(path.join(root, "chats", "chat_old.json"), '{"messages":[]}');
+		fs.writeFileSync(path.join(root, "graph", "nodes.jsonl"), '{"id":"keep"}\n');
+		writeSessionTimer("chat_old", 70000);
+		const chats = fs.readFileSync(path.join(root, "chats", "chat_old.json"), "utf8");
+		const graph = fs.readFileSync(path.join(root, "graph", "nodes.jsonl"), "utf8");
+		assert.deepEqual(resetSessionTimer("chat_old", 0), { elapsedMs: 0, generation: 1 });
+		assert.throws(() => writeSessionTimer("chat_old", 75000, 0), /changed/);
+		assert.equal(readSessionTimer("chat_old"), 0);
+		assert.equal(writeSessionTimer("chat_old", 1500, 1), 1500);
+		assert.deepEqual(readSessionTimerState("chat_old"), { elapsedMs: 1500, generation: 1 });
+		assert.throws(() => resetSessionTimer("chat_old", 0), /changed/);
+		assert.equal(fs.readFileSync(path.join(root, "chats", "chat_old.json"), "utf8"), chats);
+		assert.equal(fs.readFileSync(path.join(root, "graph", "nodes.jsonl"), "utf8"), graph);
 	});
 });

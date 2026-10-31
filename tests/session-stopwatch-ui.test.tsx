@@ -21,6 +21,7 @@ let posts: { total: number; keepalive: boolean | undefined }[];
 const roots: { root: Root; host: HTMLElement }[] = [];
 
 beforeEach(() => {
+	window.confirm = () => false;
 	now = 0; saved = 65000; posts = []; overrides.clear();
 	mock.method(performance, "now", () => now);
 	mock.timers.enable({ apis: ["setInterval"] });
@@ -55,11 +56,112 @@ async function mount(id = `timer_ui_${seq++}`, strict = false) {
 	return { root, host, id };
 }
 function control(host: HTMLElement) { return host.querySelector<HTMLButtonElement>('[data-testid="session-stopwatch"]')!; }
+function resetControl(host: HTMLElement) { return host.querySelector<HTMLButtonElement>('[data-testid="reset-session-stopwatch"]')!; }
 async function press(target: Element | typeof window, key: string, extra = {}) {
 	await act(async () => { target.dispatchEvent(Object.assign(new window.Event("keydown", { bubbles: true, cancelable: true }), {
 		key, code: `Key${key.toUpperCase()}`, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...extra,
 	})); });
 }
+
+it("cancelling reset preserves the running stopwatch without a reset request", async () => {
+	const { host } = await mount();
+	await act(async () => { control(host).click(); });
+	now = 2000;
+	await act(async () => { resetControl(host).click(); mock.timers.tick(250); });
+	assert.equal(control(host).getAttribute("aria-pressed"), "true");
+	assert.match(control(host).textContent!, /1:07/);
+});
+
+it("confirmed reset persists zero paused and new submissions count from zero", async () => {
+	let generation = 0;
+	globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
+		if (init?.method === "DELETE") { generation++; saved = 0; }
+		if (init?.method === "POST") {
+			const body = JSON.parse(String(init.body));
+			if (body.generation !== generation) return Response.json({ elapsedMs: saved, generation }, { status: 409 });
+			saved = Math.max(saved, body.elapsedMs);
+		}
+		return Response.json({ elapsedMs: saved, generation });
+	}) as typeof fetch;
+	window.confirm = () => true;
+	const { host, id, root } = await mount();
+	await act(async () => { control(host).click(); }); now = 2000;
+	await act(async () => { resetControl(host).click(); });
+	assert.equal(saved, 0);
+	assert.equal(control(host).getAttribute("aria-pressed"), "false");
+	assert.match(control(host).textContent!, /0:00/);
+	await act(async () => { host.querySelector<HTMLButtonElement>("[data-submit]")!.click(); });
+	now = 3500;
+	await act(async () => { window.dispatchEvent(new window.Event("pagehide")); });
+	assert.equal(saved, 1500);
+	await act(async () => { root.unmount(); });
+	const reopened = await mount(id);
+	assert.match(control(reopened.host).textContent!, /0:01/);
+	assert.equal(control(reopened.host).getAttribute("aria-pressed"), "false");
+});
+
+it("a late pre-reset save response cannot swallow new time after resetting", async () => {
+	let generation = 0;
+	let oldAck!: (response: Response) => void;
+	let held = false;
+	globalThis.fetch = ((_url: unknown, init?: RequestInit) => {
+		if (init?.method === "DELETE") { generation++; saved = 0; }
+		if (init?.method === "POST") {
+			const body = JSON.parse(String(init.body));
+			saved = Math.max(saved, body.elapsedMs);
+			if (!held) { held = true; return new Promise<Response>((resolve) => { oldAck = resolve; }); }
+		}
+		return Promise.resolve(Response.json({ elapsedMs: saved, generation }));
+	}) as typeof fetch;
+	window.confirm = () => true;
+	const { host } = await mount();
+	await act(async () => { control(host).click(); }); now = 5000;
+	await act(async () => { mock.timers.tick(5000); });
+	await act(async () => { resetControl(host).click(); });
+	await act(async () => { oldAck(Response.json({ elapsedMs: 70000, generation: 0 })); });
+	assert.equal(saved, 0);
+	await act(async () => { host.querySelector<HTMLButtonElement>("[data-submit]")!.click(); }); now = 6500;
+	await act(async () => { window.dispatchEvent(new window.Event("pagehide")); });
+	assert.equal(saved, 1500);
+});
+
+it("counts a submission during a pending reset and waits for it when closing", async () => {
+	let finishReset!: (response: Response) => void;
+	let flush!: () => Promise<void>;
+	window.lh = { expandWindow() {}, onSessionTimerFlush: (callback: () => Promise<void>) => { flush = callback; return () => {}; } };
+	globalThis.fetch = ((_url: unknown, init?: RequestInit) => {
+		if (init?.method === "DELETE") return new Promise<Response>((resolve) => { finishReset = resolve; });
+		if (init?.method === "POST") {
+			const body = JSON.parse(String(init.body));
+			assert.equal(body.generation, 1);
+			saved = body.elapsedMs;
+		}
+		return Promise.resolve(Response.json({ elapsedMs: saved, generation: init?.method === "POST" ? 1 : 0 }));
+	}) as typeof fetch;
+	window.confirm = () => true;
+	const { host } = await mount();
+	await act(async () => { resetControl(host).click(); });
+	assert.equal(resetControl(host).disabled, true);
+	await act(async () => { host.querySelector<HTMLButtonElement>("[data-submit]")!.click(); });
+	now = 1500;
+	let acknowledged = false;
+	let closing!: Promise<void>;
+	await act(async () => { closing = flush().then(() => { acknowledged = true; }); });
+	assert.equal(acknowledged, false);
+	await act(async () => { finishReset(Response.json({ elapsedMs: 0, generation: 1 })); await closing; });
+	assert.equal(saved, 1500);
+	assert.equal(acknowledged, true);
+	assert.equal(control(host).getAttribute("aria-pressed"), "false");
+});
+
+it("a failed reset retains the old total and reports the failure", async () => {
+	const { host } = await mount();
+	globalThis.fetch = (async () => new Response("storage unavailable", { status: 500 })) as typeof fetch;
+	window.confirm = () => true;
+	await act(async () => { resetControl(host).click(); });
+	assert.match(control(host).textContent!, /1:05/);
+	assert.match(host.textContent!, /Could not reset/);
+});
 
 it("restores paused, protects typing, toggles once per key press and honors a custom binding", async () => {
 	const { host } = await mount();
